@@ -10,7 +10,8 @@ const smoothScroll = new LocomotiveScroll({
     el: document.getElementById('page-content'),
     smooth: true,
     inertia: 0.5,
-    passive: true,
+    // passive: true,
+    // smoothMobile: false,
 });
 smoothScroll.on("scroll", () => ScrollTrigger.update);
 
