@@ -2,7 +2,7 @@
 import {Curtains, Plane, Vec2, Vec3, ShaderPass} from 'curtainsjs';
 import {gsap, smoothScroll, ScrollTrigger} from './gsap/gsapWithProxy';
 import {TextTexture} from './textCurtains/TextTexture.js';
-import {textfsscrollFs, textfsvs, textfs} from './textCurtains/textShaders.js';
+import {textVertexShader, textFragmentShader, imageVertexShader, imageFragmentShader} from './textCurtains/textShaders.js';
 window.addEventListener("load", () => {
     // we will keep track of all our planes in an array
     const planes = [];
@@ -95,67 +95,17 @@ window.addEventListener("load", () => {
     // we need to fill the counter with all our planes
     let planeDrawn = planeElements.length;
 
-    const vs = `
-        precision mediump float;
-
-        // default mandatory variables
-        attribute vec3 aVertexPosition;
-        attribute vec2 aTextureCoord;
-
-        uniform mat4 uMVMatrix;
-        uniform mat4 uPMatrix;
-
-        uniform mat4 planeTextureMatrix;
-
-        // custom variables
-        varying vec3 vVertexPosition;
-        varying vec2 vTextureCoord;
-        uniform float alpha;
-        uniform float uScrollEffect;
-        uniform float uPlaneDeformation;
-
-        void main() {
-            vec3 vertexPosition = aVertexPosition;
-
-            // cool effect on scroll
-            //vertexPosition.x += sin((vertexPosition.y / 1.5 + 1.0) * 3.141592) * (sin(uPlaneDeformation / 2000.0));
-
-            gl_Position = uPMatrix * uMVMatrix * vec4(vertexPosition, 1.0);
-            gl_Position.y += alpha * 0.01;
-            // varyings
-            vVertexPosition = vertexPosition;
-            vTextureCoord = (planeTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
-        }
-    `;
-
-    const fs = `
-        precision mediump float;
-
-        varying vec3 vVertexPosition;
-        varying vec2 vTextureCoord;
-        uniform float alpha;
-        uniform float uDisplacement;
-        uniform float uScrollEffect;
-        uniform sampler2D planeTexture;
-         
-        void main( void ) {
-            vec2 textCoords = vTextureCoord;
-            // just display our texture
-            // vTextureCoord.x = alpha;
-            vec4 red = texture2D(planeTexture, textCoords + abs(sin(uScrollEffect/5000.0)));
-            vec4 green = texture2D(planeTexture, vTextureCoord);
-            vec4 blue = texture2D(planeTexture, textCoords + abs(sin(uScrollEffect/5000.0)));
-            // gl_FragColor = texture2D(planeTexture, vTextureCoord);
-            gl_FragColor = vec4(red.r, green.g, blue.b, green.a);
-        }
-    `;
-
     const params = {
-        vertexShader: vs,
-        fragmentShader: fs,
+        vertexShader: imageVertexShader,
+        fragmentShader: imageFragmentShader,
         widthSegments: 10,
         heightSegments: 10,
         uniforms: {
+            time: {
+                name: "uTime", // uniform name that will be passed to our shaders
+                type: "1f", // this means our uniform is a float
+                value: 0,
+            },
             displacement: {
                 name: "uDisplacement",
                 type: "1f",
@@ -183,15 +133,12 @@ window.addEventListener("load", () => {
     // add our planes and handle them
     for(let i = 0; i < planeElements.length; i++) {
         const plane = new Plane(curtains, planeElements[i], params);
-        
         planes.push(plane);
         plane.textures[0].scale = new Vec3(1.2,1.2,1.2);
         handlePlanes(i);
     }
     planes.forEach((plane, index) => {
-        
-        
-        plane.onError(() => {
+                plane.onError(() => {
             console.log("plane error", plane);
         }).onReady(() => {
             // once everything is ready, display everything
@@ -204,33 +151,24 @@ window.addEventListener("load", () => {
         });
         ScrollTrigger.create({
             trigger: plane.htmlElement,
-            markers: true,
-            onEnter: () => {
-                
-            },
-            onEnterBack: () => {
-            },
+            // markers: true,
             onUpdate: (self) => {
                 gsap.to(plane.uniforms.alpha, { value: Math.min(0.5 + self.progress, 1) });
-                gsap.to(plane.htmlElement.parentElement.querySelector('h2'), { scale: 1 + self.progress })
                 // plane.uniforms.alpha.value = 0.8 + self.progress;
                 // plane.textures[0].setOffset(new Vec2(0, self.progress * 0.1))
-                gsap.to(plane.textures[0].offset, { y: self.progress * 0.15 })
+                gsap.to(plane.textures[0].offset, { y: self.progress * 0.2 })
                 // gsap.utils.interpolate(plane.textures[0].offset.y ,self.progress,0.1)
                 // plane.textures[0].setOffset(new Vec2(0, self.progress))
             }
         })
     })
-
     // handle all the planes
     function handlePlanes(index) {
         const plane = planes[index];
-
         // check if our plane is defined and use it
         plane.onReady(() => {
             // apply parallax on load
             applyPlanesParallax(index);
-
             // once everything is ready, display everything
             if(index === planes.length - 1) {
                 document.body.classList.add("planes-loaded");
@@ -251,8 +189,8 @@ window.addEventListener("load", () => {
             // console.log(scrollEffect);
 
             /*
-            // old way: using setRotation and setScale
             plane.setRotation(new Vec3(0, 0, scrollEffect / 750));
+            // old way: using setRotation and setScale
             plane.setScale(new Vec2(1, 1 + Math.abs(scrollEffect) / 300));
             plane.textures[0].setScale(new Vec2(1, 1 + Math.abs(scrollEffect) / 150));
             */
@@ -374,39 +312,7 @@ function onSuccessAddText(curtains) {
         fonts.list.forEach(font => {
             document.fonts.load(font).then(() => {
                 fonts.loaded++;
-
                 if(fonts.loaded === fonts.list.length) {
-
-                    // create our shader pass
-                    // const scrollPass = new ShaderPass(curtains, {
-                    //     // fragmentShader: textfsscrollFs,
-                    //     depth: false,
-                    //     uniforms: {
-                    //         scrollEffect: {
-                    //             name: "uScrollEffect",
-                    //             type: "1f",
-                    //             value: scroll.effect,
-                    //         },
-                    //         scrollStrength: {
-                    //             name: "uScrollStrength",
-                    //             type: "1f",
-                    //             value: 2.5,
-                    //         },
-                    //     }
-                    // });
-
-                    // calculate the lerped scroll effect
-                    // scrollPass.onRender(() => {
-                    //     scroll.lastValue = window.scrollEffect;
-                    //     scroll.value = curtains.getScrollValues().y;
-
-                    //     // clamp delta
-                    //     scroll.delta = Math.max(-30, Math.min(30, scroll.lastValue - scroll.value));
-                    //     console.log(scroll);
-                    //     scroll.effect = curtains.lerp(window.scrollEffect, scroll.delta, 0.05);
-                    //     scrollPass.uniforms.scrollEffect.value = scroll.effect;
-                    // });
-
                     // create our text planes
                     const textEls = document.querySelectorAll('.text-plane');
                     textEls.forEach(textEl => {
@@ -415,14 +321,20 @@ function onSuccessAddText(curtains) {
                         //     fragmentShader: textfs
                         // });
                         const plane = new Plane(curtains, textEl, {
-                            fragmentShader: textfs,
-                            vertexShader: textfsvs,
+                            fragmentShader: textFragmentShader,
+                            vertexShader: textVertexShader,
                             depth: false,
+                            alwaysDraw: true,
                             uniforms: {
+                                time: {
+                                    name: "uTime", // uniform name that will be passed to our shaders
+                                    type: "1f", // this means our uniform is a float
+                                    value: 0,
+                                },
                                 scrollEffect: {
                                     name: "uScrollEffect",
                                     type: "1f",
-                                    value: scroll.effect,
+                                    value: 0.0,
                                 },
                                 scrollStrength: {
                                     name: "uScrollStrength",
@@ -439,8 +351,6 @@ function onSuccessAddText(curtains) {
                             resolution: 1.5,
                             skipFontLoading: true, // we've already loaded the fonts
                         });
-                        plane.addTexture(textTexture);
-                        console.log(textTexture);
                         plane.onRender(() => {
                             scroll.lastValue = window.scrollEffect;
                             scroll.value = curtains.getScrollValues().y;
@@ -449,8 +359,8 @@ function onSuccessAddText(curtains) {
                             scroll.delta = Math.max(-30, Math.min(30, scroll.lastValue - scroll.value));
                             scroll.effect = curtains.lerp(window.scrollEffect, scroll.delta, 0.05);
                             plane.uniforms.scrollEffect.value = scroll.effect;
+                            
                         });
-                        console.log(textTexture);
                     });
                 }
             })
