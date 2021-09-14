@@ -1,6 +1,8 @@
 
 import {Curtains, Plane, Vec2, Vec3, ShaderPass} from 'curtainsjs';
 import {gsap, smoothScroll, ScrollTrigger} from './gsap/gsapWithProxy';
+import {TextTexture} from './textCurtains/TextTexture.js';
+import {textfsscrollFs, textfsvs, textfs} from './textCurtains/textShaders.js';
 window.addEventListener("load", () => {
     // we will keep track of all our planes in an array
     const planes = [];
@@ -18,7 +20,7 @@ window.addEventListener("load", () => {
         watchScroll: useNativeScroll, // watch scroll on mobile not on desktop since we're using locomotive scroll
         pixelRatio: Math.min(1.5, window.devicePixelRatio) // limit pixel ratio for performance
     });
-
+    onSuccessAddText(curtains)
     curtains.onRender(() => {
         if(useNativeScroll) {
             // update our planes deformation
@@ -47,9 +49,11 @@ window.addEventListener("load", () => {
 
         if(useNativeScroll && Math.abs(delta.y) > Math.abs(scrollEffect)) {
             scrollEffect = curtains.lerp(scrollEffect, delta.y, 0.1);
+            window.scrollEffect= curtains.lerp(scrollEffect, delta.y, 0.1);
         }
         else {
             scrollEffect = curtains.lerp(scrollEffect, delta.y * 1, 0.1);
+            window.scrollEffect = curtains.lerp(scrollEffect, delta.y * 1, 0.1);
             // console.log(scrollEffect);
         }
 
@@ -184,11 +188,6 @@ window.addEventListener("load", () => {
         plane.textures[0].scale = new Vec3(1.2,1.2,1.2);
         handlePlanes(i);
     }
-    const colors = [
-        'red',
-        'green',
-        'blue',
-    ]
     planes.forEach((plane, index) => {
         
         
@@ -354,3 +353,111 @@ window.addEventListener("load", () => {
 
 
 
+
+
+function onSuccessAddText(curtains) {
+    const scroll = {
+        value: 0,
+        lastValue: 0,
+        effect: 0,
+    };
+    curtains.onSuccess(() => {
+        const fonts = {
+            list: [
+                'normal 400 1em "Arial", sans-serif',
+                'normal 300 1em "Arial", sans-serif',
+            ],
+            loaded: 0
+        };
+
+        // load the fonts first
+        fonts.list.forEach(font => {
+            document.fonts.load(font).then(() => {
+                fonts.loaded++;
+
+                if(fonts.loaded === fonts.list.length) {
+
+                    // create our shader pass
+                    // const scrollPass = new ShaderPass(curtains, {
+                    //     // fragmentShader: textfsscrollFs,
+                    //     depth: false,
+                    //     uniforms: {
+                    //         scrollEffect: {
+                    //             name: "uScrollEffect",
+                    //             type: "1f",
+                    //             value: scroll.effect,
+                    //         },
+                    //         scrollStrength: {
+                    //             name: "uScrollStrength",
+                    //             type: "1f",
+                    //             value: 2.5,
+                    //         },
+                    //     }
+                    // });
+
+                    // calculate the lerped scroll effect
+                    // scrollPass.onRender(() => {
+                    //     scroll.lastValue = window.scrollEffect;
+                    //     scroll.value = curtains.getScrollValues().y;
+
+                    //     // clamp delta
+                    //     scroll.delta = Math.max(-30, Math.min(30, scroll.lastValue - scroll.value));
+                    //     console.log(scroll);
+                    //     scroll.effect = curtains.lerp(window.scrollEffect, scroll.delta, 0.05);
+                    //     scrollPass.uniforms.scrollEffect.value = scroll.effect;
+                    // });
+
+                    // create our text planes
+                    const textEls = document.querySelectorAll('.text-plane');
+                    textEls.forEach(textEl => {
+                        const textPlane = new Plane(curtains, textEl, {
+                            vertexShader: textfsvs,
+                            fragmentShader: textfs
+                        });
+
+                        // create the text texture and... that's it!
+                        const textTexture = new TextTexture({
+                            plane: textPlane,
+                            textElement: textPlane.htmlElement,
+                            sampler: "uTexture",
+                            resolution: 1.5,
+                            skipFontLoading: true, // we've already loaded the fonts
+                        });
+                        const plane = new Plane(curtains, textPlane.htmlElement, {
+                            fragmentShader: textfsscrollFs,
+                            vertexShader: textfsvs,
+                            depth: false,
+                            uniforms: {
+                                texture: {
+                                    name: 'uRenderTexture',
+                                    type: 'uTexture',
+                                    value: textTexture
+                                },
+                                scrollEffect: {
+                                    name: "uScrollEffect",
+                                    type: "1f",
+                                    value: scroll.effect,
+                                },
+                                scrollStrength: {
+                                    name: "uScrollStrength",
+                                    type: "1f",
+                                    value: 2.5,
+                                },
+                            }
+                        });
+                        plane.onRender(() => {
+                            scroll.lastValue = window.scrollEffect;
+                            scroll.value = curtains.getScrollValues().y;
+    
+                            // clamp delta
+                            scroll.delta = Math.max(-30, Math.min(30, scroll.lastValue - scroll.value));
+                            scroll.effect = curtains.lerp(window.scrollEffect, scroll.delta, 0.05);
+                            plane.uniforms.scrollEffect.value = scroll.effect;
+                        });
+                        console.log(textTexture);
+                    });
+                }
+            })
+        })
+    });
+}
