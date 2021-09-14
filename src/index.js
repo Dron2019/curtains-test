@@ -410,29 +410,15 @@ function onSuccessAddText(curtains) {
                     // create our text planes
                     const textEls = document.querySelectorAll('.text-plane');
                     textEls.forEach(textEl => {
-                        const textPlane = new Plane(curtains, textEl, {
-                            vertexShader: textfsvs,
-                            fragmentShader: textfs
-                        });
-
-                        // create the text texture and... that's it!
-                        const textTexture = new TextTexture({
-                            plane: textPlane,
-                            textElement: textPlane.htmlElement,
-                            sampler: "uTexture",
-                            resolution: 1.5,
-                            skipFontLoading: true, // we've already loaded the fonts
-                        });
-                        const plane = new Plane(curtains, textPlane.htmlElement, {
-                            fragmentShader: textfsscrollFs,
+                        // const textPlane = new Plane(curtains, textEl, {
+                        //     vertexShader: textfsvs,
+                        //     fragmentShader: textfs
+                        // });
+                        const plane = new Plane(curtains, textEl, {
+                            fragmentShader: textfs,
                             vertexShader: textfsvs,
                             depth: false,
                             uniforms: {
-                                texture: {
-                                    name: 'uRenderTexture',
-                                    type: 'uTexture',
-                                    value: textTexture
-                                },
                                 scrollEffect: {
                                     name: "uScrollEffect",
                                     type: "1f",
@@ -445,6 +431,16 @@ function onSuccessAddText(curtains) {
                                 },
                             }
                         });
+                        // create the text texture and... that's it!
+                        const textTexture = new TextTexture({
+                            plane: plane,
+                            textElement: plane.htmlElement,
+                            sampler: "uTexture",
+                            resolution: 1.5,
+                            skipFontLoading: true, // we've already loaded the fonts
+                        });
+                        plane.addTexture(textTexture);
+                        console.log(textTexture);
                         plane.onRender(() => {
                             scroll.lastValue = window.scrollEffect;
                             scroll.value = curtains.getScrollValues().y;
